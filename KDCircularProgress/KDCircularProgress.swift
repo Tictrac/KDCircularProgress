@@ -15,9 +15,7 @@ import UIKit
 @objcMembers
 public class KDCircularProgress: UIView, CAAnimationDelegate {
     private var progressLayer: KDCircularProgressViewLayer {
-        get {
-            return layer as! KDCircularProgressViewLayer
-        }
+        return layer as! KDCircularProgressViewLayer
     }
     
     private var radius: CGFloat = 0.0 {
@@ -90,8 +88,8 @@ public class KDCircularProgress: UIView, CAAnimationDelegate {
             progressLayer.progressThickness = progressThickness / 2.0
         }
     }
-    
-    @IBInspectable public var trackThickness: CGFloat = 0.5 {//Between 0 and 1
+
+    @IBInspectable public var trackThickness: CGFloat = 0.5 {
         didSet {
             trackThickness = trackThickness.clamp(lowerBound: 0.0, upperBound: 1.0)
             progressLayer.trackThickness = trackThickness / 2.0
@@ -126,8 +124,10 @@ public class KDCircularProgress: UIView, CAAnimationDelegate {
     
     override public init(frame: CGRect) {
         super.init(frame: frame)
-        setInitialValues()
-        refreshValues()
+        Task { @MainActor in
+            setInitialValues()
+            refreshValues()
+        }
     }
     
     convenience public init(frame:CGRect, colors: UIColor...) {
@@ -138,12 +138,16 @@ public class KDCircularProgress: UIView, CAAnimationDelegate {
     required public init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
         translatesAutoresizingMaskIntoConstraints = false
-        setInitialValues()
-        refreshValues()
+        Task { @MainActor in
+            setInitialValues()
+            refreshValues()
+        }
     }
     
     public override func awakeFromNib() {
-        checkAndSetIBColors()
+        Task { @MainActor in
+            checkAndSetIBColors()
+        }
     }
     
     override public class var layerClass: AnyClass {
@@ -154,14 +158,14 @@ public class KDCircularProgress: UIView, CAAnimationDelegate {
         super.layoutSubviews()
         radius = (frame.size.width / 2.0) * 0.8
     }
-    
-    private func setInitialValues() {
-        radius = (frame.size.width / 2.0) * 0.8 //We always apply a 20% padding, stopping glows from being clipped
+
+    @MainActor private func setInitialValues() {
+        radius = (frame.size.width / 2.0) * 0.8
         backgroundColor = .clear
         set(colors: .white, .cyan)
     }
-    
-    private func refreshValues() {
+
+    @MainActor private func refreshValues() {
         progressLayer.angle = angle
         progressLayer.startAngle = startAngle
         progressLayer.clockwise = clockwise
@@ -174,8 +178,8 @@ public class KDCircularProgress: UIView, CAAnimationDelegate {
         progressLayer.trackColor = trackColor
         progressLayer.trackThickness = trackThickness / 2.0
     }
-    
-    private func checkAndSetIBColors() {
+
+    @MainActor private func checkAndSetIBColors() {
         let IBColors = [IBColor1, IBColor2, IBColor3].compactMap { $0 }
         if IBColors.isEmpty == false {
             set(colors: IBColors)
@@ -193,15 +197,15 @@ public class KDCircularProgress: UIView, CAAnimationDelegate {
     
     public func animate(fromAngle: Double, toAngle: Double, duration: TimeInterval, relativeDuration: Bool = true, completion: ((Bool) -> Void)?) {
         pauseIfAnimating()
-        let animationDuration: TimeInterval
-        if relativeDuration {
-            animationDuration = duration
-        } else {
-            let traveledAngle = (toAngle - fromAngle).mod(between: 0.0, and: 360.0, byIncrementing: 360.0)
-            let scaledDuration = TimeInterval(traveledAngle) * duration / 360.0
-            animationDuration = scaledDuration
-        }
-        
+        let animationDuration: TimeInterval = {
+            if relativeDuration {
+                return duration
+            } else {
+                let traveledAngle = (toAngle - fromAngle).mod(between: 0.0, and: 360.0, byIncrementing: 360.0)
+                return TimeInterval(traveledAngle) * duration / 360.0
+            }
+        }()
+
         let animation = CABasicAnimation(keyPath: #keyPath(KDCircularProgressViewLayer.angle))
         animation.fromValue = fromAngle
         animation.toValue = toAngle
@@ -221,7 +225,6 @@ public class KDCircularProgress: UIView, CAAnimationDelegate {
     
     public func pauseAnimation() {
         guard let presentationLayer = progressLayer.presentation() else { return }
-        
         let currentValue = presentationLayer.angle
         progressLayer.removeAllAnimations()
         angle = currentValue
@@ -241,10 +244,12 @@ public class KDCircularProgress: UIView, CAAnimationDelegate {
     public func isAnimating() -> Bool {
         return progressLayer.animation(forKey: "angle") != nil
     }
-    
-    public func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
-        animationCompletionBlock?(flag)
-        animationCompletionBlock = nil
+
+    nonisolated public func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
+        Task { @MainActor in
+            animationCompletionBlock?(flag)
+            animationCompletionBlock = nil
+        }
     }
     
     public override func didMoveToWindow() {
@@ -258,10 +263,12 @@ public class KDCircularProgress: UIView, CAAnimationDelegate {
     }
     
     public override func prepareForInterfaceBuilder() {
-        setInitialValues()
-        refreshValues()
-        checkAndSetIBColors()
-        progressLayer.setNeedsDisplay()
+        Task { @MainActor in
+            setInitialValues()
+            refreshValues()
+            checkAndSetIBColors()
+            progressLayer.setNeedsDisplay()
+        }
     }
     
     private class KDCircularProgressViewLayer: CALayer {
